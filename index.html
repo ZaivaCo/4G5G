@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>基站建设模拟器</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f0f4f8;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #2c3e50;
+            margin: 20px 0;
+        }
+        #canvas {
+            width: 1000px; /* 修改宽度 */
+            height: 700px; /* 修改高度 */
+            border: 2px solid #333;
+            position: relative;
+            background: white;
+            margin: 20px;
+        }
+        .user {
+            position: absolute;
+            font-size: 40px;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s;
+        }
+        .base-station {
+            position: absolute;
+            font-size: 48px;
+            transform: translate(-50%, -50%);
+        }
+        .station-label {
+            position: absolute;
+            font-size: 12px;
+            text-align: center;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 3px;
+            transform: translateX(-50%);
+        }
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        #add4G {
+            background: #4CAF50;
+            color: white;
+        }
+        #add5G {
+            background: #2196F3;
+            color: white;
+        }
+        #resetButton {
+            background: #E74C3C;
+            color: white;
+        }
+        #status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .signal-bar {
+            width: 200px;
+            height: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            background: linear-gradient(90deg, #e74c3c, #f1c40f, #2ecc71);
+        }
+        #counter {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        #musicControl {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <h1>基站建设模拟器</h1>
+    <div id="canvas">
+        <!-- 初始双模基站 -->
+        <div class="base-station" style="left: 500px; top: 350px">📡</div>
+        <div class="station-label" style="left: 500px; top: 390px">双模基站</div>
+        <div id="user" class="user">😀</div>
+    </div>
+
+    <div id="status">
+        <div>4G速率：<span id="4g">0</span> Mbps</div>
+        <div>5G速率：<span id="5g">0</span> Mbps</div>
+        <div class="signal-bar" id="signalBar"></div>
+    </div>
+
+    <div id="counter">
+        <div>4G基站：<span id="4gCount">1</span></div> <!-- 初始值改为1 -->
+        <div>5G基站：<span id="5gCount">1</span></div> <!-- 初始值改为1 -->
+        <div>总基站：<span id="totalCount">1</span></div> <!-- 初始值改为1 -->
+    </div>
+
+    <div id="controls">
+        <button id="add4G">新建4G基站</button>
+        <button id="add5G">新建5G基站</button>
+        <button id="resetButton">重置</button> <!-- 新增重置按钮 -->
+    </div>
+
+    <div id="musicControl" onclick="toggleAudio()">🎵 开启音效</div>
+
+    <audio id="bgm" loop>
+        <source src="music.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const user = document.getElementById('user');
+        const bgm = document.getElementById('bgm');
+        let stations = [{x: 500, y: 350, type: 'dual'}]; // 初始双模基站
+        let isAudioEnabled = false;
+        const BASE_VOLUME = 0.6;
+        const SIGNAL = {
+            '4G': { max: 100, range: 300 },   // 4G峰值100Mbps
+            '5G': { max: 1000, range: 150 }   // 5G峰值1000Mbps
+        };
+
+        // 初始化用户位置
+        let userX = 500, userY = 350;
+        updateUserPosition();
+
+        function updateUserPosition() {
+            user.style.left = userX + 'px';
+            user.style.top = userY + 'px';
+        }
+
+        function createStation(type) {
+            const station = document.createElement('div');
+            station.className = 'base-station';
+            station.style.left = userX + 'px';
+            station.style.top = userY + 'px';
+            station.innerHTML = '📡';
+
+            const label = document.createElement('div');
+            label.className = 'station-label';
+            label.textContent = type + '基站';
+            label.style.left = userX + 'px';
+            label.style.top = userY + 40 + 'px';
+
+            canvas.appendChild(station);
+            canvas.appendChild(label);
+            stations.push({x: userX, y: userY, type});
+            
+            updateCounter();
+            updateSignal();
+        }
+
+        function updateCounter() {
+            const count4G = stations.filter(s => s.type === '4G' || s.type === 'dual').length;
+            const count5G = stations.filter(s => s.type === '5G' || s.type === 'dual').length;
+            const totalCount = stations.length;
+
+            // 双模基站仅算作一个总基站
+            document.getElementById('4gCount').textContent = count4G;
+            document.getElementById('5gCount').textContent = count5G;
+            document.getElementById('totalCount').textContent = totalCount;
+        }
+
+        function updateSignal() {
+            let best4G = 0, best5G = 0;
+
+            stations.forEach(station => {
+                const dx = userX - station.x;
+                const dy = userY - station.y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+
+                if(station.type === 'dual') {
+                    best4G = Math.max(best4G, SIGNAL['4G'].max * Math.max(0, 1 - (distance/SIGNAL['4G'].range)**2));
+                    best5G = Math.max(best5G, SIGNAL['5G'].max * Math.max(0, 1 - (distance/SIGNAL['5G'].range)**2));
+                }
+                else if(station.type === '4G') {
+                    best4G = Math.max(best4G, SIGNAL['4G'].max * Math.max(0, 1 - (distance/SIGNAL['4G'].range)**2));
+                }
+                else if(station.type === '5G') {
+                    best5G = Math.max(best5G, SIGNAL['5G'].max * Math.max(0, 1 - (distance/SIGNAL['5G'].range)**2));
+                }
+            });
+
+            const final4G = Math.round(best4G);
+            const final5G = Math.round(best5G);
+            const maxSignal = Math.max(final4G, final5G);
+
+            // 更新显示
+            document.getElementById('4g').textContent = final4G;
+            document.getElementById('5g').textContent = final5G;
+
+            // 更新信号条
+            document.getElementById('signalBar').style.background = 
+                `linear-gradient(90deg, 
+                 #e74c3c ${maxSignal/10}%,
+                 #f1c40f ${maxSignal/2}%, 
+                 #2ecc71 ${maxSignal}%)`;
+
+            // 更新音量（信号为0时静音）
+            if(isAudioEnabled) {
+                const volumeScale = maxSignal > 0 ? Math.min(1, maxSignal / 1000) : 0;
+                bgm.volume = BASE_VOLUME * volumeScale;
+            }
+        }
+
+        function toggleAudio() {
+            isAudioEnabled = !isAudioEnabled;
+            document.getElementById('musicControl').textContent = `🎵 ${isAudioEnabled ? '关闭' : '开启'}音效`;
+            
+            if(isAudioEnabled) {
+                bgm.play().catch(() => {
+                    alert("请先点击页面任意位置激活音频");
+                    isAudioEnabled = false;
+                });
+            } else {
+                bgm.pause();
+            }
+        }
+
+        // 用户控制
+        document.addEventListener('keydown', (e) => {
+            const speed = 8;
+            const boundCheck = (value, max) => Math.max(20, Math.min(max - 20, value));
+            
+            switch(e.key) {
+                case 'ArrowUp': userY = boundCheck(userY - speed, 700); break; // 调整边界检查
+                case 'ArrowDown': userY = boundCheck(userY + speed, 700); break; // 调整边界检查
+                case 'ArrowLeft': userX = boundCheck(userX - speed, 1000); break; // 调整边界检查
+                case 'ArrowRight': userX = boundCheck(userX + speed, 1000); break; // 调整边界检查
+            }
+            updateUserPosition();
+            updateSignal();
+        });
+
+        document.getElementById('add4G').addEventListener('click', () => createStation('4G'));
+        document.getElementById('add5G').addEventListener('click', () => createStation('5G'));
+
+        // 重置功能
+        document.getElementById('resetButton').addEventListener('click', () => {
+            // 清空画布中的所有基站
+            const baseStations = document.querySelectorAll('.base-station');
+            const labels = document.querySelectorAll('.station-label');
+            baseStations.forEach(station => station.remove());
+            labels.forEach(label => label.remove());
+
+            // 恢复初始状态
+            stations = [{x: 500, y: 350, type: 'dual'}];
+            userX = 500;
+            userY = 350;
+            updateUserPosition();
+
+            // 创建初始双模基站
+            const initialStation = document.createElement('div');
+            initialStation.className = 'base-station';
+            initialStation.style.left = '500px';
+            initialStation.style.top = '350px';
+            initialStation.innerHTML = '📡';
+            canvas.appendChild(initialStation);
+
+            const initialLabel = document.createElement('div');
+            initialLabel.className = 'station-label';
+            initialLabel.textContent = '双模基站';
+            initialLabel.style.left = '500px';
+            initialLabel.style.top = '390px';
+            canvas.appendChild(initialLabel);
+
+            updateCounter();
+            updateSignal();
+        });
+
+        // 音频初始化
+        document.addEventListener('click', () => {
+            bgm.play().then(() => {
+                isAudioEnabled = true;
+                document.getElementById('musicControl').textContent = '🎵 关闭音效';
+            }).catch(() => {});
+        }, { once: true });
+
+        // 初始更新
+        updateCounter();
+        updateSignal();
+    </script>
+</body>
+</html>
